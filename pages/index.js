@@ -1,65 +1,90 @@
-import Head from 'next/head'
-import styles from '../styles/Home.module.css'
+import React, { useState } from 'react';
+import { ApolloClient, gql, InMemoryCache } from '@apollo/client';
 
-export default function Home() {
+import Head from 'next/head';
+import D3Chart from '@/components/D3Chart';
+import Recharts from '@/components/Recharts';
+import styles from '@/styles/Home.module.scss';
+
+const Home = ({ data }) => {
+  const [open, setOpen] = useState(0);
+  const launches = [];
+
+  data.map((launch) => {
+    launches.push({
+      date: new Date(launch['launch_date_local']).toLocaleDateString('en-US'),
+      totalPayload: launch['rocket']['second_stage']['payloads']
+        .map((item) => item['payload_mass_kg'])
+        .reduce((a, b) => a + b),
+    });
+  });
+
   return (
-    <div className={styles.container}>
+    <div>
       <Head>
-        <title>Create Next App</title>
-        <link rel="icon" href="/favicon.ico" />
+        <title>D3 Graph</title>
       </Head>
-
-      <main className={styles.main}>
-        <h1 className={styles.title}>
-          Welcome to <a href="https://nextjs.org">Next.js!</a>
-        </h1>
-
-        <p className={styles.description}>
-          Get started by editing{' '}
-          <code className={styles.code}>pages/index.js</code>
-        </p>
-
-        <div className={styles.grid}>
-          <a href="https://nextjs.org/docs" className={styles.card}>
-            <h3>Documentation &rarr;</h3>
-            <p>Find in-depth information about Next.js features and API.</p>
-          </a>
-
-          <a href="https://nextjs.org/learn" className={styles.card}>
-            <h3>Learn &rarr;</h3>
-            <p>Learn about Next.js in an interactive course with quizzes!</p>
-          </a>
-
-          <a
-            href="https://github.com/vercel/next.js/tree/master/examples"
-            className={styles.card}
-          >
-            <h3>Examples &rarr;</h3>
-            <p>Discover and deploy boilerplate example Next.js projects.</p>
-          </a>
-
-          <a
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=default-template&utm_campaign=create-next-app"
-            className={styles.card}
-          >
-            <h3>Deploy &rarr;</h3>
-            <p>
-              Instantly deploy your Next.js site to a public URL with Vercel.
-            </p>
-          </a>
+      <main>
+        <div className={styles.wrapper}>
+          <h1>Total SpaceX launch payloads</h1>
+          <div>
+            <label>
+              <input
+                type="radio"
+                name="d3js"
+                checked={open === 0}
+                onChange={(e) => setOpen(0)}
+              />
+              D3JS library
+            </label>
+            <label>
+              <input
+                type="radio"
+                name="chartjs"
+                checked={open === 1}
+                onChange={(e) => setOpen(1)}
+              />
+              Recharts library
+            </label>
+          </div>
+          {open === 0 && <D3Chart data={launches} />}
+          {open === 1 && <Recharts data={launches} />}
         </div>
       </main>
-
-      <footer className={styles.footer}>
-        <a
-          href="https://vercel.com?utm_source=create-next-app&utm_medium=default-template&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          Powered by{' '}
-          <img src="/vercel.svg" alt="Vercel Logo" className={styles.logo} />
-        </a>
-      </footer>
     </div>
-  )
+  );
+};
+
+export default Home;
+
+export async function getServerSideProps() {
+  const client = new ApolloClient({
+    uri: 'https://api.spacex.land/graphql/',
+    cache: new InMemoryCache(),
+  });
+
+  const {
+    data: { launchesPast },
+  } = await client.query({
+    query: gql`
+      query GetLaunches {
+        launchesPast(limit: 100) {
+          launch_date_local
+          rocket {
+            second_stage {
+              payloads {
+                payload_mass_kg
+              }
+            }
+          }
+        }
+      }
+    `,
+  });
+
+  return {
+    props: {
+      data: launchesPast,
+    },
+  };
 }
